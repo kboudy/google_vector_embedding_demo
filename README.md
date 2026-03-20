@@ -33,10 +33,3 @@ media has been dropped in.  ingest that into pinecone, then build me a simple ch
 ```
 Update the chat app to display images/videos/pdfs inline when they come back as sources
 ```
-
-## test questions
-
-- how many speeds does the vitaxmix 7500 blender have
-- show me a video involving a musical instrument and an animal
-- do you have any pictures of people wearing makeup
-- how many cleaning modes does the dyson ball vacuum have
