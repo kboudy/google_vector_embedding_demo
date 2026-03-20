@@ -1,0 +1,9 @@
+google-genai
+pinecone
+python-dotenv
+openai
+pypdf
+flask
+plotly
+scikit-learn
+numpy
