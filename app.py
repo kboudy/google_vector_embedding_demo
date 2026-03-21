@@ -14,7 +14,8 @@ EMBED_MODEL = "gemini-embedding-2-preview"
 EMBED_DIM = 768
 CHAT_MODEL = "anthropic/claude-sonnet-4-6"
 TOP_K = 5
-MIN_SCORE = 0.5  # discard results below this cosine similarity
+MIN_SCORE = 0.5  # text query threshold
+MIN_SCORE_IMAGE = 0.8  # image query threshold (cross-modal scores run lower)
 DATA_DIR = os.path.abspath("data")
 
 
@@ -54,7 +55,10 @@ def chat():
     vector = embed_result.embeddings[0].values
 
     # Search Pinecone
-    search_results = index.query(vector=vector, top_k=TOP_K, include_metadata=True)
+    search_results = index.query(
+        vector=vector, top_k=TOP_K, include_metadata=True,
+        filter={"embed_type": {"$eq": "text"}},
+    )
     matches = [m for m in search_results.matches if m.score >= MIN_SCORE]
 
     # Build context and source list
@@ -124,6 +128,57 @@ def chat():
             "sources": sources,
         }
     )
+
+
+@app.route("/search-image", methods=["POST"])
+def search_image():
+    file = request.files.get("image")
+    if not file:
+        return jsonify({"error": "No image provided"}), 400
+
+    mime_type = file.mimetype or "image/jpeg"
+    image_bytes = file.read()
+
+    gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+    index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
+
+    embed_result = gemini.models.embed_content(
+        model=EMBED_MODEL,
+        contents=types.Content(
+            role="user",
+            parts=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+            ],
+        ),
+        config=types.EmbedContentConfig(output_dimensionality=EMBED_DIM),
+    )
+    vector = embed_result.embeddings[0].values
+
+    search_results = index.query(
+        vector=vector, top_k=TOP_K, include_metadata=True,
+        filter={"embed_type": {"$eq": "visual"}},
+    )
+    matches = [m for m in search_results.matches if m.score >= MIN_SCORE_IMAGE]
+
+    sources = []
+    for match in matches:
+        meta = match.metadata or {}
+        raw_path = meta.get("path", "")
+        rel = raw_path.replace("\\", "/")
+        url = "/media/" + rel[len("data/") :] if rel.startswith("data/") else None
+        sources.append(
+            {
+                "filename": meta.get("filename", "unknown"),
+                "type": meta.get("type", "unknown"),
+                "score": round(match.score, 3),
+                "page_start": meta.get("page_start"),
+                "page_end": meta.get("page_end"),
+                "url": url,
+            }
+        )
+
+    return jsonify({"sources": sources})
 
 
 if __name__ == "__main__":

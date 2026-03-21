@@ -312,6 +312,30 @@
 
     button:hover { opacity:.85; box-shadow: 0 0 16px var(--accent-glow); }
     button:disabled { opacity:.25; cursor: not-allowed; box-shadow: none; }
+
+    /* ── Image search button ── */
+    #img-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0;
+      width: 46px;
+      transition: border-color .2s, color .2s;
+    }
+
+    #img-btn:hover { border-color: rgba(232,184,75,.3); color: var(--accent); box-shadow: none; }
+
+    #img-btn svg { pointer-events: none; }
+
+    /* ── Query image preview ── */
+    .query-image {
+      max-width: 180px;
+      max-height: 130px;
+      object-fit: cover;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -331,6 +355,13 @@
 <footer>
   <div class="bar">
     <textarea id="inp" placeholder="Ask a question..." rows="1" autofocus></textarea>
+    <button id="img-btn" title="Search by image" onclick="document.getElementById('img-input').click()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
+    <input type="file" id="img-input" accept="image/*" style="display:none" onchange="searchByImage(this)">
     <button id="btn" onclick="send()">Send</button>
   </div>
 </footer>
@@ -421,6 +452,57 @@
     return s
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/\n/g,'<br>');
+  }
+
+  async function searchByImage(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    document.getElementById('empty')?.remove();
+    btn.disabled = true;
+
+    // Show query image in feed
+    const objectUrl = URL.createObjectURL(file);
+    const queryDiv = document.createElement('div');
+    queryDiv.className = 'msg user';
+    queryDiv.innerHTML = `
+      <div class="msg-role">You — image search</div>
+      <img class="query-image" src="${objectUrl}">
+    `;
+    feed.appendChild(queryDiv);
+    addTyping();
+    feed.scrollTop = feed.scrollHeight;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/search-image', { method: 'POST', body: formData });
+      const data = await res.json();
+      document.getElementById('typing')?.remove();
+
+      if (data.error) {
+        addMsg('bot', 'Error: ' + data.error);
+      } else if (!data.sources.length) {
+        addMsg('bot', 'No visually similar content found in the knowledge base.');
+      } else {
+        const div = document.createElement('div');
+        div.className = 'msg bot';
+        div.innerHTML = `
+          <div class="msg-role">Assistant — similar content</div>
+          <div class="msg-body">Found ${data.sources.length} visually similar item${data.sources.length > 1 ? 's' : ''}:</div>
+          ${renderSources(data.sources)}
+        `;
+        feed.appendChild(div);
+        feed.scrollTop = feed.scrollHeight;
+      }
+    } catch {
+      document.getElementById('typing')?.remove();
+      addMsg('bot', 'Connection error. Is the server running?');
+    }
+
+    btn.disabled = false;
   }
 
   async function send() {

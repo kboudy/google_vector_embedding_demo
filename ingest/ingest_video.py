@@ -51,24 +51,38 @@ def ingest_video():
             description = description_result.text
         print(f"  Description: {description[:120]}...")
 
+        base_metadata = {
+            "type": "video",
+            "filename": fpath.name,
+            "path": str(fpath),
+            "description": description,
+        }
+
         print(f"Embedding {fpath.name}...")
-        embed_result = gemini.models.embed_content(
+
+        # Visual vector — media bytes for image similarity search
+        visual_result = gemini.models.embed_content(
+            model=EMBED_MODEL,
+            contents=types.Content(role="user", parts=[
+                types.Part.from_bytes(data=video_bytes, mime_type=mime_type),
+            ]),
+            config=types.EmbedContentConfig(output_dimensionality=EMBED_DIM),
+        )
+
+        # Text vector — description for chat/RAG search
+        text_result = gemini.models.embed_content(
             model=EMBED_MODEL,
             contents=description,
             config=types.EmbedContentConfig(output_dimensionality=EMBED_DIM),
         )
 
-        index.upsert(vectors=[{
-            "id": str(uuid.uuid4()),
-            "values": embed_result.embeddings[0].values,
-            "metadata": {
-                "type": "video",
-                "filename": fpath.name,
-                "path": str(fpath),
-                "description": description,
-            },
-        }])
-        print(f"Upserted video: {fpath.name}")
+        index.upsert(vectors=[
+            {"id": str(uuid.uuid4()), "values": visual_result.embeddings[0].values,
+             "metadata": {**base_metadata, "embed_type": "visual"}},
+            {"id": str(uuid.uuid4()), "values": text_result.embeddings[0].values,
+             "metadata": {**base_metadata, "embed_type": "text"}},
+        ])
+        print(f"Upserted video (x2 vectors): {fpath.name}")
 
     print(f"Done. Total videos ingested: {len(files)}")
 

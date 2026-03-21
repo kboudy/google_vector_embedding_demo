@@ -74,6 +74,7 @@ def ingest_pdfs():
                 "values": result.embeddings[0].values,
                 "metadata": {
                     "type": "pdf",
+                    "embed_type": "text",
                     "filename": fpath.name,
                     "path": str(fpath),
                     "page_start": page_start,

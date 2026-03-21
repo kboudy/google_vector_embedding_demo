@@ -45,9 +45,10 @@ def ingest_text():
                 "text": chunk,
                 "metadata": {
                     "type": "text",
+                    "embed_type": "text",
                     "filename": fpath.name,
                     "chunk_index": i,
-                    "text": chunk,  # stored for RAG retrieval
+                    "text": chunk,
                 },
             })
 
